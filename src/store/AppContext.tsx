@@ -19,7 +19,12 @@ export type Screen =
   | { name: 'success' }
   | { name: 'orders' }
 
-export type CartItem = { food: Food; qty: number }
+export type CartItem = { food: Food; qty: number; note: string }
+
+export type OrderStatus = 'preparing' | 'picked_up'
+
+/** 1 Gold = 1,000 VND; employees may advance at most this much salary per month. */
+export const MONTHLY_TOPUP_LIMIT = 2000
 
 export type Order = {
   id: string
@@ -30,6 +35,7 @@ export type Order = {
   method: PaymentMethod
   goldUsed: number
   createdAt: Date
+  status: OrderStatus
 }
 
 type Toast = { id: number; message: string }
@@ -45,6 +51,8 @@ type AppState = {
   gold: number
   topUpGold: (amount: number) => void
   setGoldBalance: (amount: number) => void
+  monthlyToppedUp: number
+  resetMonthlyTopUp: () => void
 
   // restaurant
   selectedRestaurant: Restaurant | null
@@ -55,16 +63,23 @@ type AppState = {
   cartRestaurant: Restaurant | null
   cartCount: number
   cartTotal: number
-  addToCart: (food: Food, qty: number) => void
+  /** Returns false when the dish is from another restaurant; a confirm dialog is then shown. */
+  addToCart: (food: Food, qty: number) => boolean
   changeQty: (foodId: string, delta: number) => void
   removeFromCart: (foodId: string) => void
+  setNote: (foodId: string, note: string) => void
+  pendingAdd: CartItem | null
+  confirmNewCart: () => void
+  cancelNewCart: () => void
 
   // payment + orders
   paymentMethod: PaymentMethod | null
   setPaymentMethod: (method: PaymentMethod | null) => void
   currentOrder: Order | null
   orders: Order[]
+  preparingCount: number
   placeOrder: (method: PaymentMethod) => Order | null
+  markPickedUp: (orderId: string) => void
 
   // feedback
   toast: Toast | null
@@ -78,6 +93,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [gold, setGold] = useState(INITIAL_GOLD)
   const [selectedRestaurantId, setSelectedRestaurantId] = useState<string | null>(null)
   const [cart, setCart] = useState<CartItem[]>([])
+  const [pendingAdd, setPendingAdd] = useState<CartItem | null>(null)
+  const [monthlyToppedUp, setMonthlyToppedUp] = useState(0)
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null)
   const [currentOrder, setCurrentOrder] = useState<Order | null>(null)
   const [orders, setOrders] = useState<Order[]>([])
@@ -97,7 +114,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const back = useCallback(() => setStack((s) => (s.length > 1 ? s.slice(0, -1) : s)), [])
   const resetTo = useCallback((next: Screen[]) => setStack(next), [])
 
-  const topUpGold = useCallback((amount: number) => setGold((g) => g + amount), [])
+  const topUpGold = useCallback((amount: number) => {
+    setGold((g) => g + amount)
+    setMonthlyToppedUp((m) => m + amount)
+  }, [])
+  const resetMonthlyTopUp = useCallback(() => setMonthlyToppedUp(0), [])
 
   const selectRestaurant = useCallback((id: string) => setSelectedRestaurantId(id), [])
 
@@ -107,23 +128,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addToCart = useCallback(
     (food: Food, qty: number) => {
-      // A cart can only hold dishes from one restaurant.
-      const fromSameRestaurant = (items: CartItem[]) =>
-        items.every((i) => i.food.restaurantId === food.restaurantId)
-      if (!fromSameRestaurant(cart)) {
-        showToast(`Started a new cart for ${findRestaurant(food.restaurantId)?.name}`)
+      // A cart can only hold dishes from one restaurant: ask before starting a new order.
+      if (cart.some((i) => i.food.restaurantId !== food.restaurantId)) {
+        setPendingAdd({ food, qty, note: '' })
+        return false
       }
       setCart((current) => {
-        const base = fromSameRestaurant(current) ? current : []
-        const existing = base.find((i) => i.food.id === food.id)
+        const existing = current.find((i) => i.food.id === food.id)
         if (existing) {
-          return base.map((i) => (i.food.id === food.id ? { ...i, qty: i.qty + qty } : i))
+          return current.map((i) => (i.food.id === food.id ? { ...i, qty: i.qty + qty } : i))
         }
-        return [...base, { food, qty }]
+        return [...current, { food, qty, note: '' }]
       })
+      return true
     },
-    [cart, showToast],
+    [cart],
   )
+
+  const confirmNewCart = useCallback(() => {
+    if (!pendingAdd) return
+    setCart([pendingAdd])
+    setPaymentMethod(null)
+    setPendingAdd(null)
+    showToast(`New order started at ${findRestaurant(pendingAdd.food.restaurantId)?.name}`)
+  }, [pendingAdd, showToast])
+
+  const cancelNewCart = useCallback(() => setPendingAdd(null), [])
+
+  const setNote = useCallback((foodId: string, note: string) => {
+    setCart((current) => current.map((i) => (i.food.id === foodId ? { ...i, note } : i)))
+  }, [])
 
   const changeQty = useCallback((foodId: string, delta: number) => {
     setCart((current) =>
@@ -152,6 +186,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         method,
         goldUsed,
         createdAt: new Date(),
+        status: 'preparing',
       }
       if (goldUsed) setGold((g) => g - goldUsed)
       setOrders((o) => [order, ...o])
@@ -163,6 +198,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [cart, cartRestaurant, cartTotal, gold],
   )
 
+  const markPickedUp = useCallback((orderId: string) => {
+    setOrders((list) => list.map((o) => (o.id === orderId ? { ...o, status: 'picked_up' } : o)))
+  }, [])
+
+  const preparingCount = orders.filter((o) => o.status === 'preparing').length
+
   const value = useMemo<AppState>(
     () => ({
       screen: stack[stack.length - 1],
@@ -172,6 +213,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       gold,
       topUpGold,
       setGoldBalance: setGold,
+      monthlyToppedUp,
+      resetMonthlyTopUp,
       selectedRestaurant: findRestaurant(selectedRestaurantId),
       selectRestaurant,
       cart,
@@ -181,18 +224,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addToCart,
       changeQty,
       removeFromCart,
+      setNote,
+      pendingAdd,
+      confirmNewCart,
+      cancelNewCart,
       paymentMethod,
       setPaymentMethod,
       currentOrder,
       orders,
+      preparingCount,
       placeOrder,
+      markPickedUp,
       toast,
       showToast,
     }),
     [
-      stack, navigate, back, resetTo, gold, topUpGold, selectedRestaurantId, selectRestaurant,
-      cart, cartRestaurant, cartCount, cartTotal, addToCart, changeQty, removeFromCart,
-      paymentMethod, currentOrder, orders, placeOrder, toast, showToast,
+      stack, navigate, back, resetTo, gold, topUpGold, monthlyToppedUp, resetMonthlyTopUp,
+      selectedRestaurantId, selectRestaurant, cart, cartRestaurant, cartCount, cartTotal,
+      addToCart, changeQty, removeFromCart, setNote, pendingAdd, confirmNewCart, cancelNewCart,
+      paymentMethod, currentOrder, orders, preparingCount, placeOrder, markPickedUp, toast, showToast,
     ],
   )
 

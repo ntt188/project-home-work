@@ -53,8 +53,7 @@ export function FoodMenu() {
             qtyInCart={qtyOf(f.id)}
             onOpen={() => navigate({ name: 'food', foodId: f.id })}
             onAdd={() => {
-              addToCart(f, 1)
-              showToast(`Added ${f.name}`)
+              if (addToCart(f, 1)) showToast(`Added ${f.name}`)
             }}
             onChangeQty={(delta) => changeQty(f.id, delta)}
           />

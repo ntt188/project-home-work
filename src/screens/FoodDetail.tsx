@@ -15,7 +15,7 @@ export function FoodDetail({ foodId }: { foodId: string }) {
   const inCart = cart.find((i) => i.food.id === food.id)?.qty ?? 0
 
   const handleAdd = () => {
-    addToCart(food, qty)
+    if (!addToCart(food, qty)) return
     showToast(`Added ${qty} × ${food.name} to cart`)
     back()
   }

@@ -54,10 +54,13 @@ export function OrderSuccess() {
         {/* Receipt */}
         <div className="rounded-2xl p-4 text-sm ring-1 ring-slate-100">
           <ul className="space-y-1.5">
-            {order.items.map(({ food, qty }) => (
+            {order.items.map(({ food, qty, note }) => (
               <li key={food.id} className="flex gap-2">
-                <span className="w-7 font-semibold text-brand-600">{qty}×</span>
-                <span className="flex-1">{food.name}</span>
+                <span className="w-7 shrink-0 font-semibold text-brand-600">{qty}×</span>
+                <span className="flex-1">
+                  {food.name}
+                  {note && <span className="block text-xs text-slate-500 italic">“{note}”</span>}
+                </span>
                 <span>{formatVND(food.price * qty)}</span>
               </li>
             ))}

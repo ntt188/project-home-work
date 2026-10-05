@@ -93,10 +93,13 @@ export function Payment() {
               <span className="text-lg">{cartRestaurant?.emoji}</span> {cartRestaurant?.name}
             </p>
             <ul className="space-y-2 text-sm">
-              {cart.map(({ food, qty }) => (
+              {cart.map(({ food, qty, note }) => (
                 <li key={food.id} className="flex gap-2">
                   <span className="w-7 shrink-0 font-semibold text-brand-600">{qty}×</span>
-                  <span className="flex-1">{food.name}</span>
+                  <span className="flex-1">
+                    {food.name}
+                    {note && <span className="block text-xs text-slate-500 italic">“{note}”</span>}
+                  </span>
                   <span className="font-medium">{formatVND(food.price * qty)}</span>
                 </li>
               ))}

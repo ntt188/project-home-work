@@ -1,3 +1,4 @@
+import { NewCartDialog } from './components/NewCartDialog'
 import { Toast } from './components/ui'
 import { AppProvider, useApp } from './store/AppContext'
 import type { Screen } from './store/AppContext'
@@ -53,6 +54,7 @@ function PhoneShell() {
         <div key={screenKey(screen)} className="absolute inset-0">
           {renderScreen(screen)}
         </div>
+        <NewCartDialog />
         <Toast />
       </div>
     </div>

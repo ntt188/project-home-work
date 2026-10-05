@@ -11,7 +11,11 @@ import { useApp } from '../store/AppContext'
 import { ScanQRModal } from './ScanQRModal'
 
 export function CanteenHome() {
-  const { gold, navigate, back, selectRestaurant, showToast, currentOrder, cartCount, orders, setGoldBalance } = useApp()
+  const {
+    gold, navigate, back, selectRestaurant, showToast, cartCount, orders, preparingCount,
+    setGoldBalance, monthlyToppedUp, resetMonthlyTopUp,
+  } = useApp()
+  const activeOrder = orders.find((o) => o.status === 'preparing')
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('all')
   const [scanning, setScanning] = useState(false)
@@ -71,6 +75,18 @@ export function CanteenHome() {
                     </button>
                   ))}
                 </div>
+                <button
+                  type="button"
+                  disabled={!monthlyToppedUp}
+                  onClick={() => {
+                    resetMonthlyTopUp()
+                    setDemoOpen(false)
+                    showToast('Monthly top-up limit reset')
+                  }}
+                  className="mt-2 w-full rounded-2xl py-3 text-sm font-semibold text-slate-600 ring-1 ring-slate-200 transition hover:bg-slate-50 disabled:opacity-40"
+                >
+                  Reset monthly top-up ({monthlyToppedUp.toLocaleString('en-US')} / 2,000 used)
+                </button>
               </div>
             </div>
           )}
@@ -80,7 +96,7 @@ export function CanteenHome() {
         <BottomNavigation
           items={[
             { icon: 'home', label: 'Canteen', active: true, onClick: () => {} },
-            { icon: 'receipt', label: 'Orders', badge: orders.length || undefined, onClick: () => navigate({ name: 'orders' }) },
+            { icon: 'receipt', label: 'Orders', badge: preparingCount || undefined, onClick: () => navigate({ name: 'orders' }) },
             { icon: 'cart', label: 'Cart', badge: cartCount || undefined, onClick: () => navigate({ name: 'cart' }) },
             { icon: 'user', label: 'Account', onClick: () => setDemoOpen(true) },
           ]}
@@ -121,7 +137,7 @@ export function CanteenHome() {
       </div>
 
       {/* Active order */}
-      {currentOrder && (
+      {activeOrder && (
         <div className="px-4 pt-3">
           <button
             type="button"
@@ -129,12 +145,12 @@ export function CanteenHome() {
             className="animate-fade-up flex w-full items-center gap-3 rounded-2xl bg-emerald-50 p-3.5 text-left ring-1 ring-emerald-100"
           >
             <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-emerald-500 text-lg font-extrabold text-white">
-              {currentOrder.queueNumber}
+              {activeOrder.queueNumber}
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block text-sm font-bold text-emerald-800">Order #{currentOrder.id} is being prepared</span>
+              <span className="block text-sm font-bold text-emerald-800">Order #{activeOrder.id} is being prepared</span>
               <span className="block truncate text-xs text-emerald-700">
-                {currentOrder.restaurant.name} · Ready in 10–15 min
+                {activeOrder.restaurant.name} · Ready in 10–15 min
               </span>
             </span>
             <Icon name="chevronRight" className="size-5 text-emerald-600" />
